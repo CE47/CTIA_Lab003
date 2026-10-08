@@ -29,6 +29,72 @@
   function streamWindow() { return (EN.stream && EN.stream.window) || ''; }
   function streamFiles() { return (EN.stream && EN.stream.files) || []; }
 
+  /* ---------------- option order ----------------
+     Authored order is an answer key in disguise. In the assessment fields the
+     correct answer sat in the leading slots — A for a single answer, A+B for two,
+     A+B+C for three — so the whole stage could be filed by clicking the first
+     option of each question without reading a word.
+
+     So the order is decided here, from the case seed, instead of by whoever typed
+     the question. Two properties matter and both are deliberate:
+       deterministic — the same case always produces the same order, so reloading
+         mid-question never moves an answer under the analyst's cursor, and a
+         student cannot farm a position by refreshing;
+       independent per field — a different permutation each time, so no slot is
+         worth guessing.
+
+     Options are re-ordered, never the key: every question is answered by option id,
+     so grading, the locked review view and the retry path are unaffected.
+
+     Scope: every question in the case — the timeline pattern, both behaviour
+     questions, both ATT&CK questions, the five assessment fields, the defence
+     question — and the indicator chips, so the two actionable ones are not always
+     the first two either. */
+  function hashStr(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function mulberry(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function shuffleOptions(q, salt) {
+    if (!q || !q.options || q.options.length < 2) return;
+    var rnd = mulberry(hashStr(salt + '#' + ((q.id || '') + '|' + (q.prompt || ''))));
+    var list = q.options.slice();
+    for (var i = list.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+    }
+    q.options = list;
+  }
+  function shuffleCase(sc) {
+    if (!sc || sc.__shuffled) return;
+    sc.__shuffled = true;
+    var qs = [];
+    if (sc.timelineQuestion) qs.push([sc.timelineQuestion, 'timeline']);
+    (sc.behaviourQuestions || []).forEach(function (q, i) { qs.push([q, 'behaviour' + i]); });
+    if (sc.attack) {
+      if (sc.attack.primary) qs.push([sc.attack.primary, 'attack-primary']);
+      if (sc.attack.alsoPresent) qs.push([sc.attack.alsoPresent, 'attack-also']);
+    }
+    Object.keys(sc.report || {}).forEach(function (k) { qs.push([sc.report[k], 'report-' + k]); });
+    if (sc.reasoning) qs.push([sc.reasoning, 'defence']);
+    qs.forEach(function (pair) { shuffleOptions(pair[0], pair[1] + '@' + (sc.seed || 0)); });
+    /* the indicators are a classification exercise, not a reading order — shuffling
+       them hides which two are the actionable ones by position */
+    shuffleOptions(sc.iocs, 'iocs@' + (sc.seed || 0));
+  }
+
   /* ---------------- stage definitions ---------------- */
   var STAGES = [
     { id: 'detect', num: '01', title: 'Detect', short: 'DETECT',
@@ -1344,6 +1410,7 @@
       document.body.innerHTML = '<p style="padding:40px;font-family:monospace">Scenario data failed to load.</p>';
       return;
     }
+    shuffleCase(SC);
     initBrief();
     initAssist();
     renderXp();

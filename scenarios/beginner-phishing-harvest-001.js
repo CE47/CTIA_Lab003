@@ -175,7 +175,7 @@
         text: 'Outbound connection 10.0.4.10 \u2192 198.51.100.42:443 (HTTPS). Same destination as 08:01:12, after the external logon.',
         tags: 'signal',
         why:
-          'Getting in was not the end of the operation. Reconnecting to the phishing host two minutes after the ' +
+          'Getting in was not the end of the operation. Reconnecting to the phishing host two and a half minutes after the ' +
           'logon is the attacker collecting what that access unlocked \u2014 session material, or the next stage.'
       },
 
